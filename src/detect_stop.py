@@ -16,7 +16,7 @@ def is_stopped(track_id, new_pos):
     last_positions = np.array(history[track_id][-10:])
     mov = np.mean(np.linalg.norm(np.diff(last_positions, axis=0), axis=1))
 
-    return mov < LIMIAR_PARADO  # limiar
+    return mov < LIMIAR_PARADO
 
 
 def main():
@@ -51,7 +51,7 @@ def main():
                     estado_pedestre = "verde"
 
                 color = (0, 255, 0) if stopped else (0, 0, 255)
-                text = "Parado" if stopped else "Andando"
+                text = "Aguardando travessia" if stopped else "Andando"
 
                 cv2.rectangle(annotated, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
                 cv2.putText(annotated, text, (int(x1), int(y1)-10),
