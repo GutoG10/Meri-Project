@@ -3,17 +3,18 @@ import cv2
 import numpy as np
 
 history = {}
-LIMIAR_PARADO = 20  
+LIMIAR_PARADO = 10   # pixels por frame — abaixo disso é parado
+FRAMES_PARADO = 45   # ~1.5s a 30fps para confirmar que está parado
 
 def is_stopped(track_id, new_pos):
     if track_id not in history:
         history[track_id] = []
     history[track_id].append(new_pos)
 
-    if len(history[track_id]) < 10:
+    if len(history[track_id]) < FRAMES_PARADO:
         return False
 
-    last_positions = np.array(history[track_id][-10:])
+    last_positions = np.array(history[track_id][-FRAMES_PARADO:])
     mov = np.mean(np.linalg.norm(np.diff(last_positions, axis=0), axis=1))
 
     return mov < LIMIAR_PARADO

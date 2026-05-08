@@ -1,0 +1,4 @@
+Modelo,FPS_medio,Tempo_medio_ms,Confianca_media,CPU_medio_pct,Memoria_media_MB,TP,FP,FN,TN,Precisao,Recall,F1,Acuracia,Total_frames
+YOLOv8,12.79,78.18,0.8377,69.6,937.8,413,274,2,132,0.6012,0.9952,0.7495,0.6638,821
+SSD,10.92,91.55,0.6551,73.9,1266.0,271,114,144,292,0.7039,0.653,0.6775,0.6857,821
+Faster R-CNN,0.56,1782.72,0.96,66.5,2023.8,415,291,0,115,0.5878,1.0,0.7404,0.6456,821
