@@ -29,9 +29,12 @@ Projeto de TCC — Comparação de 10 detectores de objetos para detecção de p
 
 ## 2. Instalação
 
+Link do repositório:
+https://github.com/GutoG10/tcc-project
+
 ```bash
 # Clone o repositório
-git clone <url-do-repo>
+git clone https://github.com/GutoG10/tcc-project.git
 cd tcc-project
 
 # Crie e ative um ambiente virtual
