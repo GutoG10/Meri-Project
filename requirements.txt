@@ -1,6 +1,15 @@
-ultralytics
+# Dependencias base
+ultralytics          # YOLOv8, RT-DETR
 opencv-python
 numpy
 torch
-torchvision
+torchvision          # SSD, Faster R-CNN, RetinaNet, FCOS
 psutil
+
+# Modelos baseados em Transformers (DETR, Conditional DETR, Deformable DETR)
+transformers
+Pillow
+
+# EfficientDet
+effdet
+timm
