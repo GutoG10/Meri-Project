@@ -1,7 +1,4 @@
-"""Deteccao em tempo real com DETR — semaforo virtual para pedestres parados.
 
-Instalacao: pip install transformers Pillow
-"""
 import sys
 from pathlib import Path
 
@@ -18,12 +15,15 @@ def main():
     from PIL import Image
     from transformers import DetrForObjectDetection, DetrImageProcessor
 
+    # DETR (Detection Transformer): usa atenção multi-head em vez de âncoras ou NMS,
+    # carregado do HuggingFace Hub com backbone ResNet-50
     processor = DetrImageProcessor.from_pretrained("facebook/detr-resnet-50")
     model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50").eval()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     history: dict = {}
+    # CentroidTracker provê rastreamento frame a frame via associação por distância
     tracker = CentroidTracker()
     cap = cv2.VideoCapture(0)
 
@@ -32,6 +32,7 @@ def main():
         if not ret:
             break
 
+        # O processador do HuggingFace espera PIL Image em RGB; converte de BGR
         pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         inputs = {k: v.to(device) for k, v in
                   processor(images=pil_img, return_tensors="pt").items()}
@@ -39,11 +40,13 @@ def main():
         with torch.no_grad():
             outputs = model(**inputs)
 
+        # post_process_object_detection redimensiona as caixas de volta ao tamanho original
         target_sizes = torch.tensor([pil_img.size[::-1]], device=device)
         results = processor.post_process_object_detection(
             outputs, threshold=0.5, target_sizes=target_sizes
         )[0]
 
+        # Filtra apenas label==1 (pessoa no COCO)
         centroids, centroid_scores, centroid_boxes = [], {}, {}
         for score, label, box in zip(results["scores"].cpu(),
                                      results["labels"].cpu(),
@@ -72,6 +75,7 @@ def main():
                 cv2.putText(annotated, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
+        # Semáforo virtual: círculo verde se algum pedestre está parado, vermelho caso contrário
         semaforo = np.zeros((300, 200, 3), dtype=np.uint8)
         cor = (0, 255, 0) if estado == "verde" else (0, 0, 255)
         cv2.circle(semaforo, (100, 150), 70, cor, -1)

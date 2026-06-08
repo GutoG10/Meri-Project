@@ -1,4 +1,3 @@
-"""Deteccao em tempo real com RT-DETR — semaforo virtual para pedestres parados."""
 import sys
 from pathlib import Path
 
@@ -14,10 +13,14 @@ _ROOT = Path(__file__).parents[2]
 def main():
     from ultralytics import RTDETR
 
+    # RT-DETR: variante em tempo real do DETR, distribuída pelo Ultralytics.
+    # Procura os pesos em weights/; se não encontrar, baixa automaticamente.
     weights = _ROOT / "weights" / "rtdetr-l.pt"
     model = RTDETR(str(weights) if weights.exists() else "rtdetr-l.pt")
 
     history: dict = {}
+    # RT-DETR via Ultralytics inclui rastreamento nativo (persist=True),
+    # dispensando CentroidTracker externo — mesmo comportamento do YOLOv8
     cap = cv2.VideoCapture(0)
 
     while True:
@@ -25,6 +28,7 @@ def main():
         if not ret:
             break
 
+        # classes=[0] restringe a detecção à classe "pessoa" do COCO
         results = model.track(frame, classes=[0], persist=True, verbose=False)
         annotated = frame.copy()
         estado = "vermelho"
@@ -45,6 +49,7 @@ def main():
                 cv2.putText(annotated, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
+        # Semáforo virtual: círculo verde se algum pedestre está parado, vermelho caso contrário
         semaforo = np.zeros((300, 200, 3), dtype=np.uint8)
         cor = (0, 255, 0) if estado == "verde" else (0, 0, 255)
         cv2.circle(semaforo, (100, 150), 70, cor, -1)

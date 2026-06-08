@@ -1,21 +1,9 @@
-"""
-Ferramenta de anotacao de ground truth para videos de teste.
-
-Uso:
-    python annotate.py video.mp4 ground_truth.json
-
-Controles durante a reproducao:
-    0     -> sem pedestre
-    1     -> pedestre andando
-    2     -> pedestre parado (aguardando travessia)
-    SPACE -> pausar / continuar
-    ESC   -> salvar e encerrar
-"""
-
 import cv2
 import json
 import sys
 
+# Mapeamento dos três estados possíveis de um pedestre em cada frame:
+# 0 = nenhum pedestre visível, 1 = pedestre em movimento, 2 = pedestre parado (aguardando)
 LABEL_TEXT  = {0: "SEM PEDESTRE", 1: "ANDANDO", 2: "PARADO"}
 LABEL_COLOR = {0: (100, 100, 100), 1: (0, 0, 255), 2: (0, 255, 0)}
 
@@ -31,6 +19,9 @@ def annotate_video(video_path: str, output_path: str) -> None:
     print(f"Video: {total} frames | {fps_video:.0f} FPS")
     print("Controles: 0 = sem pedestre | 1 = andando | 2 = parado | SPACE = pausar | ESC = salvar")
 
+    # Armazena os segmentos de anotação como lista de (frame_inicio, label).
+    # Ao pressionar uma tecla de label, um novo segmento começa a partir do frame atual.
+    # O vídeo começa pausado para permitir que o anotador posicione antes de reproduzir.
     segments = [(0, 0)]
     paused = True
     frame_idx = 0
@@ -41,6 +32,8 @@ def annotate_video(video_path: str, output_path: str) -> None:
         sys.exit(1)
     frame_idx = 1
 
+    # Loop principal de anotação: avança frame a frame quando não pausado,
+    # renderiza o HUD com frame atual e label corrente, e captura teclas.
     while True:
         if not paused:
             ret, frame = cap.read()
@@ -53,6 +46,7 @@ def annotate_video(video_path: str, output_path: str) -> None:
         color = LABEL_COLOR[current_label]
         label_text = LABEL_TEXT[current_label]
 
+        # HUD sobreposto no canto superior esquerdo: contador de frames, label atual e estado
         cv2.rectangle(display, (0, 0), (460, 100), (0, 0, 0), -1)
         cv2.putText(display, f"Frame {frame_idx}/{total}", (10, 28),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
@@ -62,6 +56,7 @@ def annotate_video(video_path: str, output_path: str) -> None:
         cv2.putText(display, estado, (10, 85),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 0), 1)
 
+        # Redimensiona para caber em monitores menores sem distorcer a imagem original
         max_h, max_w = 720, 1280
         h, w = display.shape[:2]
         scale = min(max_w / w, max_h / h, 1.0)
@@ -70,10 +65,11 @@ def annotate_video(video_path: str, output_path: str) -> None:
 
         cv2.imshow("Anotacao - Ground Truth", display)
 
+        # Delay adaptativo: 100 ms pausado (responsivo ao teclado), ou sincronizado ao FPS do vídeo
         delay = 100 if paused else max(1, int(1000 / fps_video))
         key = cv2.waitKey(delay) & 0xFF
 
-        if key == 27:   # ESC
+        if key == 27:   # ESC — encerra e salva
             break
         elif key == ord('0') and current_label != 0:
             segments.append((frame_idx, 0))
@@ -87,6 +83,8 @@ def annotate_video(video_path: str, output_path: str) -> None:
     cap.release()
     cv2.destroyAllWindows()
 
+    # Converte a lista de segmentos em um dicionário frame→label cobrindo todos os frames.
+    # Ex: segments = [(0,0),(30,2),(60,1)] gera gt["0"]..gt["29"]=0, gt["30"]..gt["59"]=2, etc.
     gt: dict[str, int] = {}
     seg_sorted = sorted(segments, key=lambda x: x[0])
     for i, (start, lbl) in enumerate(seg_sorted):
@@ -97,6 +95,7 @@ def annotate_video(video_path: str, output_path: str) -> None:
     with open(output_path, "w") as fp:
         json.dump(gt, fp)
 
+    # Exibe a distribuição de classes para o anotador conferir antes de fechar
     counts = {k: sum(1 for v in gt.values() if v == k) for k in (0, 1, 2)}
     print(f"\nSalvo em: {output_path}")
     for lbl, text in LABEL_TEXT.items():

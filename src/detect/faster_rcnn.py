@@ -1,4 +1,3 @@
-"""Deteccao em tempo real com Faster R-CNN — semaforo virtual para pedestres parados."""
 import sys
 from pathlib import Path
 
@@ -18,12 +17,15 @@ def main():
     )
     from torchvision.transforms import functional as TF
 
+    # Carrega o Faster R-CNN com backbone ResNet-50 + FPN, pré-treinado no COCO
     weights = FasterRCNN_ResNet50_FPN_Weights.COCO_V1
     model = fasterrcnn_resnet50_fpn(weights=weights).eval()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     history: dict = {}
+    # Faster R-CNN não possui rastreamento nativo; CentroidTracker associa detecções
+    # de frames consecutivos por proximidade de centróide para manter IDs estáveis
     tracker = CentroidTracker()
     cap = cv2.VideoCapture(0)
 
@@ -32,10 +34,12 @@ def main():
         if not ret:
             break
 
+        # Converte BGR→RGB e normaliza para [0,1] conforme esperado pelo torchvision
         tensor = TF.to_tensor(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).to(device)
         with torch.no_grad():
             pred = model([tensor])[0]
 
+        # Filtra apenas label==1 (pessoa no COCO) com score acima do limiar
         centroids, centroid_scores, centroid_boxes = [], {}, {}
         for label, score, box in zip(pred["labels"].cpu().numpy(),
                                      pred["scores"].cpu().numpy(),
@@ -47,6 +51,7 @@ def main():
                 centroid_scores[c] = float(score)
                 centroid_boxes[c] = (x1, y1, x2, y2)
 
+        # Atualiza o tracker com os centróides detectados e obtém IDs consistentes
         tracked = tracker.update(centroids)
 
         annotated = frame.copy()
@@ -64,6 +69,7 @@ def main():
                 cv2.putText(annotated, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
+        # Semáforo virtual: círculo verde se algum pedestre está parado, vermelho caso contrário
         semaforo = np.zeros((300, 200, 3), dtype=np.uint8)
         cor = (0, 255, 0) if estado == "verde" else (0, 0, 255)
         cv2.circle(semaforo, (100, 150), 70, cor, -1)

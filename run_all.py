@@ -21,6 +21,14 @@ from pathlib import Path
 
 
 def parse_args():
+    # Define os argumentos do script de orquestração em lote:
+    # - --videos-dir: pasta que contém os .mp4 e seus _gt.json correspondentes
+    # - --output-dir: onde os CSVs individuais e o consolidado serão salvos
+    # - --models: subconjunto de modelos; omitir roda todos
+    # - --conf: limiar de confiança repassado ao evaluate.py
+    # - --skip-frames: acelera o processamento pulando frames (ex: 5 = 5x mais rápido)
+    # - --skip-existing: retoma uma execução interrompida sem reprocessar o que já foi feito
+    # - --no-merge: útil quando se quer os CSVs individuais sem gerar o consolidado
     parser = argparse.ArgumentParser(
         description="Avalia todos os videos com todos os modelos automaticamente"
     )
@@ -57,6 +65,9 @@ def parse_args():
 
 
 def find_pairs(videos_dir: Path):
+    # Varre a pasta procurando arquivos *_gt.json e verifica se o .mp4 correspondente existe.
+    # A convenção adotada é: "nome_video.mp4" + "nome_video_gt.json" na mesma pasta.
+    # Retorna lista de tuplas (nome_base, caminho_video, caminho_gt).
     pairs = []
     for gt_file in sorted(videos_dir.glob("*_gt.json")):
         video_stem = gt_file.stem[:-3]  # "meu_video_gt" -> "meu_video"
@@ -69,6 +80,10 @@ def find_pairs(videos_dir: Path):
 
 
 def merge_csvs(output_dir: Path, pairs, merged_path: Path):
+    # Lê cada CSV individual gerado por evaluate.py e acrescenta uma coluna "Video"
+    # para identificar de qual vídeo veio cada linha.
+    # O resultado é um único CSV com todas as métricas de todos os vídeos e modelos,
+    # facilitando comparações agregadas em planilhas ou scripts de análise.
     all_rows = []
     headers = None
     for video_name, _, _ in pairs:
@@ -99,6 +114,7 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Descobre todos os pares (video, ground_truth) disponíveis na pasta
     pairs = find_pairs(videos_dir)
     if not pairs:
         print(f"Nenhum par video+GT encontrado em '{videos_dir}/'")
@@ -112,11 +128,15 @@ def main():
     evaluate_script = Path(__file__).parent / "src" / "evaluate.py"
     failed = []
 
+    # Itera sobre cada par e chama evaluate.py como subprocesso isolado.
+    # Usar subprocess garante que uma falha em um vídeo não interrompe os demais
+    # e que o ambiente de memória/GPU é liberado entre execuções.
     for i, (video_name, video_file, gt_file) in enumerate(pairs, 1):
         print(f"\n{'='*65}")
         print(f"[{i}/{len(pairs)}] Video: {video_name}")
         print(f"{'='*65}")
 
+        # Permite retomar uma execução parcial sem reprocessar vídeos já prontos
         if args.skip_existing and (output_dir / f"{video_name}.csv").exists():
             print(f"  CSV ja existe, pulando.")
             continue
@@ -142,6 +162,7 @@ def main():
     if failed:
         print(f"Falhas: {', '.join(failed)}")
 
+    # Gera o CSV consolidado com todos os resultados, a menos que --no-merge seja passado
     if not args.no_merge:
         merged_path = output_dir / "todos_resultados.csv"
         merge_csvs(output_dir, pairs, merged_path)

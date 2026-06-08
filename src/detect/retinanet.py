@@ -1,4 +1,3 @@
-"""Deteccao em tempo real com RetinaNet — semaforo virtual para pedestres parados."""
 import sys
 from pathlib import Path
 
@@ -18,12 +17,15 @@ def main():
     )
     from torchvision.transforms import functional as TF
 
+    # RetinaNet com ResNet-50 + FPN: detector one-stage com Focal Loss,
+    # projetado para lidar melhor com desbalanceamento foreground/background
     weights = RetinaNet_ResNet50_FPN_Weights.COCO_V1
     model = retinanet_resnet50_fpn(weights=weights).eval()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     history: dict = {}
+    # CentroidTracker provê rastreamento frame a frame via associação por distância
     tracker = CentroidTracker()
     cap = cv2.VideoCapture(0)
 
@@ -32,10 +34,12 @@ def main():
         if not ret:
             break
 
+        # Converte BGR→RGB e normaliza para [0,1] conforme esperado pelo torchvision
         tensor = TF.to_tensor(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).to(device)
         with torch.no_grad():
             pred = model([tensor])[0]
 
+        # Filtra apenas label==1 (pessoa no COCO) com score acima do limiar
         centroids, centroid_scores, centroid_boxes = [], {}, {}
         for label, score, box in zip(pred["labels"].cpu().numpy(),
                                      pred["scores"].cpu().numpy(),
@@ -64,6 +68,7 @@ def main():
                 cv2.putText(annotated, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
+        # Semáforo virtual: círculo verde se algum pedestre está parado, vermelho caso contrário
         semaforo = np.zeros((300, 200, 3), dtype=np.uint8)
         cor = (0, 255, 0) if estado == "verde" else (0, 0, 255)
         cv2.circle(semaforo, (100, 150), 70, cor, -1)

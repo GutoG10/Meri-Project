@@ -1,8 +1,4 @@
-"""Deteccao em tempo real com Cascade R-CNN — semaforo virtual para pedestres parados.
 
-Instalacao: pip install mmengine mmcv mmdet openmim
-Pesos:      mim download mmdet --config cascade-rcnn_r50_fpn_1x_coco --dest weights/
-"""
 import sys
 from pathlib import Path
 
@@ -14,6 +10,8 @@ from core.metrics import is_stopped
 from core.tracker import CentroidTracker
 
 _ROOT = Path(__file__).parents[2]
+# Cascade R-CNN requer arquivos de configuração e checkpoint do mmdetection;
+# devem ser baixados com: mim download mmdet --config cascade-rcnn_r50_fpn_1x_coco --dest weights/
 _CONFIG     = _ROOT / "weights" / "cascade-rcnn_r50_fpn_1x_coco.py"
 _CHECKPOINT = _ROOT / "weights" / "cascade_rcnn_r50_fpn_1x_coco_20200316-3dc56dde.pth"
 
@@ -29,6 +27,7 @@ def main():
         )
 
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    # init_detector: carrega modelo e pesos via API do mmdetection
     model = init_detector(str(_CONFIG), str(_CHECKPOINT), device=device)
 
     history: dict = {}
@@ -40,12 +39,14 @@ def main():
         if not ret:
             break
 
+        # inference_detector: executa a detecção e retorna um objeto DetDataSample
         result = inference_detector(model, frame)
         instances = result.pred_instances
         labels = instances.labels.cpu().numpy()
         scores = instances.scores.cpu().numpy()
         bboxes = instances.bboxes.cpu().numpy()
 
+        # No mmdetection, label==0 corresponde à classe "pessoa" (índice base-0, diferente do COCO padrão)
         centroids, centroid_scores, centroid_boxes = [], {}, {}
         for lbl, score, box in zip(labels, scores, bboxes):
             if lbl == 0 and score >= 0.5:
@@ -72,6 +73,7 @@ def main():
                 cv2.putText(annotated, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
+        # Semáforo virtual: círculo verde se algum pedestre está parado, vermelho caso contrário
         semaforo = np.zeros((300, 200, 3), dtype=np.uint8)
         cor = (0, 255, 0) if estado == "verde" else (0, 0, 255)
         cv2.circle(semaforo, (100, 150), 70, cor, -1)

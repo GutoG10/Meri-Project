@@ -1,25 +1,3 @@
-"""
-Avaliacao comparativa de modelos de deteccao de pedestres parados.
-
-Uso basico (todos os modelos):
-    python src/evaluate.py video.mp4 ground_truth.json
-
-Selecionar modelos especificos:
-    python src/evaluate.py video.mp4 ground_truth.json --models yolov8 retinanet fcos
-
-Salvar em arquivo especifico:
-    python src/evaluate.py video.mp4 ground_truth.json --output results/meu_resultado.csv
-
-Modelos disponiveis:
-    yolov8, ssd, faster_rcnn, retinanet, fcos,
-    efficientdet, detr, rt_detr, cascade_rcnn, deformable_detr
-
-O ground_truth.json deve ser gerado pelo annotate.py com os rotulos:
-    0 = sem pedestre | 1 = andando | 2 = parado (aguardando travessia)
-
-A avaliacao e binaria: o modelo acertou quando o semaforo deveria ser verde (GT=2)?
-"""
-
 import argparse
 import importlib
 import sys
@@ -34,6 +12,13 @@ from models import AVAILABLE_MODELS
 
 
 def parse_args():
+    # Define os argumentos aceitos pela linha de comando:
+    # - video: caminho do vídeo de teste
+    # - ground_truth: JSON com as anotações reais de cada frame (0=ausente, 1=andando, 2=parado)
+    # - --output: onde salvar o CSV com os resultados (padrão: results/resultados.csv)
+    # - --models: quais modelos rodar; se omitido, roda todos os disponíveis
+    # - --conf: limiar de confiança mínimo para aceitar uma detecção
+    # - --skip-frames: pula N frames entre cada análise, reduzindo o tempo de execução
     parser = argparse.ArgumentParser(
         description="Avaliacao comparativa de detectores de pedestres"
     )
@@ -70,6 +55,8 @@ def parse_args():
 def main() -> None:
     args = parse_args()
 
+    # Abre o vídeo apenas para contar o total de frames; fecha logo em seguida.
+    # O total é necessário para alinhar o ground truth ao comprimento real do vídeo.
     cap = cv2.VideoCapture(args.video)
     if not cap.isOpened():
         print(f"Erro: nao foi possivel abrir {args.video}")
@@ -77,12 +64,19 @@ def main() -> None:
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
 
+    # Carrega as anotações do JSON e converte para binário:
+    # gt_raw mantém os três estados (0/1/2) para as estatísticas descritivas,
+    # gt_binary colapsa para 0 (pedestre ausente/andando) e 1 (pedestre parado),
+    # que é o rótulo que os modelos precisam prever.
     gt_raw    = load_gt(args.ground_truth, total)
     gt_binary = [1 if v == 2 else 0 for v in gt_raw]
 
+    # Aplica o mesmo skip ao ground truth para manter o alinhamento frame a frame
+    # com as predições dos modelos, que também pulam frames.
     if args.skip_frames > 1:
         gt_binary = gt_binary[::args.skip_frames]
 
+    # Exibe um resumo do vídeo e da distribuição de classes antes de rodar os modelos
     n_parado  = sum(1 for v in gt_raw if v == 2)
     n_andando = sum(1 for v in gt_raw if v == 1)
     n_ausente = sum(1 for v in gt_raw if v == 0)
@@ -100,6 +94,9 @@ def main() -> None:
     # Garantir que a pasta de saida existe
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
 
+    # Carrega e executa cada modelo dinamicamente via importlib.
+    # Cada módulo em models/<id>.py deve expor uma função run(video, gt, conf, skip)
+    # que processa o vídeo e devolve um dicionário com as métricas calculadas.
     results = []
     for model_id in args.models:
         label = AVAILABLE_MODELS[model_id]
@@ -115,6 +112,7 @@ def main() -> None:
         except Exception as e:
             print(f"  Erro inesperado: {e}")
 
+    # Imprime a tabela comparativa no terminal e salva o CSV com todas as métricas
     if results:
         print_table(results)
         save_csv(results, args.output)

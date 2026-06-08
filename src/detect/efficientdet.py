@@ -1,7 +1,4 @@
-"""Deteccao em tempo real com EfficientDet-D0 — semaforo virtual para pedestres parados.
 
-Instalacao: pip install effdet timm
-"""
 import sys
 from pathlib import Path
 
@@ -12,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.metrics import is_stopped
 from core.tracker import CentroidTracker
 
+# EfficientDet-D0 espera entrada 512×512 normalizada com média/desvio da ImageNet
 _INPUT_SIZE = 512
 _MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -21,6 +19,7 @@ def main():
     import torch
     from effdet import create_model
 
+    # Cria EfficientDet-D0 no modo de predição com pesos pré-treinados no COCO
     model = create_model("efficientdet_d0", bench_task="predict", pretrained=True)
     model = model.eval()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -35,7 +34,9 @@ def main():
         if not ret:
             break
 
+        # Guarda dimensões originais para reprojetar as caixas após o resize
         orig_h, orig_w = frame.shape[:2]
+        # Redimensiona, converte para RGB, normaliza com média/desvio da ImageNet
         img = cv2.resize(frame, (_INPUT_SIZE, _INPUT_SIZE))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
         img = (img - _MEAN) / _STD
@@ -44,6 +45,7 @@ def main():
         with torch.no_grad():
             output = model(tensor)
 
+        # effdet retorna detecções como array (N, 6): [y1, x1, y2, x2, score, class_id]
         dets = output[0].cpu().numpy()
 
         centroids, centroid_scores, centroid_boxes = [], {}, {}
@@ -51,7 +53,9 @@ def main():
             y1, x1, y2, x2, score, class_id = det
             if score < 0.5:
                 continue
+            # class_id==1 corresponde à classe "pessoa" no COCO (índice base-1)
             if int(round(class_id)) == 1:
+                # Reprojetar coordenadas do espaço 512×512 para o tamanho original do frame
                 xi1 = int(x1 * orig_w / _INPUT_SIZE)
                 xi2 = int(x2 * orig_w / _INPUT_SIZE)
                 yi1 = int(y1 * orig_h / _INPUT_SIZE)
@@ -78,6 +82,7 @@ def main():
                 cv2.putText(annotated, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
+        # Semáforo virtual: círculo verde se algum pedestre está parado, vermelho caso contrário
         semaforo = np.zeros((300, 200, 3), dtype=np.uint8)
         cor = (0, 255, 0) if estado == "verde" else (0, 0, 255)
         cv2.circle(semaforo, (100, 150), 70, cor, -1)
