@@ -328,3 +328,10 @@ Pressione `ESC` para encerrar.
 | `FRAMES_PARADO` | 45    | Janela de frames analisados (~1,5 s a 30 FPS sem skip)        |
 
 A avaliação é **binária**: o modelo acerta quando o semáforo deveria ser verde (GT = 2, pedestre parado) e o modelo também prevê parado.
+
+
+comandos para apresentação
+
+python src/detect/yolov8.py
+python src/evaluate.py videos/mulher.mp4 videos/mulher_gt.json --models yolov8 --output "resultados apresentação/mulher.csv"
+python visualize.py videos/mulher.mp4 yolov8
